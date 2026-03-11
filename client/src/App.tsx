@@ -15,7 +15,9 @@ import {
 import { isEmbedded, bridgeGetAddress, bridgeGetBalance, bridgeSignTransaction } from './services';
 import { STAKE_TIERS, STORAGE_KEYS, BSV_NETWORK } from './constants';
 import { sfx } from './services/SoundService';
+import WalletPage from './components/WalletPage';
 import './App.css';
+import './styles/WalletStyles.css';
 
 type WalletSource = 'local' | 'yours' | 'embedded';
 const networkLabel = BSV_NETWORK === 'main' ? 'mainnet' : 'testnet';
@@ -35,6 +37,7 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [selectedTier, setSelectedTier] = useState(1);
   const [payingDeposit, setPayingDeposit] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
 
   const mp = useMultiplayer();
 
@@ -336,6 +339,21 @@ function App() {
   // ========================================================================
   // MAIN GAME UI
   // ========================================================================
+  if (showWallet) {
+    return (
+      <div className="app">
+        <WalletPage
+          onBack={() => { setShowWallet(false); refreshBalance(); }}
+          walletAddress={address}
+          balance={balance}
+          bsvPrice={bsvPrice}
+          walletSource={walletSource}
+          onRefreshBalance={refreshBalance}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="app">
       {/* Top bar */}
@@ -346,6 +364,7 @@ function App() {
           {walletSource === 'yours' && <span className="topbar-badge">Yours</span>}
         </div>
         <div className="topbar-right">
+          <button className="topbar-wallet-btn" onClick={() => setShowWallet(true)}>Wallet</button>
           <div className="topbar-stat">
             <span className="stat-label">Balance</span>
             <span className="stat-value">{balance.toLocaleString()} sats</span>
