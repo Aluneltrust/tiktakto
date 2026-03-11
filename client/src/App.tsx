@@ -6,6 +6,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { PrivateKey } from '@bsv/sdk';
 import { useMultiplayer } from './hooks/useMultiplayer';
 import { bsvWalletService } from './services/BsvWalletService';
+import { yoursWalletService } from './services/YoursWalletService';
 import { fetchBsvPrice } from './services/BsvPriceService';
 import {
   hasStoredWallet, getAddressHint, encryptAndStoreWif,
@@ -16,15 +17,18 @@ import { STAKE_TIERS, STORAGE_KEYS, BSV_NETWORK } from './constants';
 import { sfx } from './services/SoundService';
 import './App.css';
 
+type WalletSource = 'local' | 'yours' | 'embedded';
 const networkLabel = BSV_NETWORK === 'main' ? 'mainnet' : 'testnet';
 
 function App() {
   const [walletReady, setWalletReady] = useState(false);
+  const [walletSource, setWalletSource] = useState<WalletSource>('local');
   const [address, setAddress] = useState('');
   const [balance, setBalance] = useState(0);
   const [bsvPrice, setBsvPrice] = useState(0);
   const [username, setUsername] = useState(() => localStorage.getItem(STORAGE_KEYS.USERNAME) || '');
   const [embeddedMode] = useState(() => isEmbedded());
+  const [yoursAvailable, setYoursAvailable] = useState(false);
   const [loginMode, setLoginMode] = useState<'none' | 'create' | 'unlock' | 'import'>('none');
   const [pin, setPin] = useState('');
   const [importWif, setImportWif] = useState('');
@@ -46,6 +50,7 @@ function App() {
           setUsername(savedName);
           setAddress(addr);
           setBalance(bal);
+          setWalletSource('embedded');
           setWalletReady(true);
         } catch (e) {
           console.error('Bridge wallet init failed:', e);
@@ -59,9 +64,21 @@ function App() {
     else setLoginMode('create');
   }, []);
 
+  // Detect Yours Wallet extension
+  useEffect(() => {
+    const check = () => setYoursAvailable(yoursWalletService.isExtensionAvailable());
+    check();
+    const timer = setTimeout(check, 1000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const refreshBalance = useCallback(async () => {
-    if (embeddedMode) {
+    if (walletSource === 'embedded') {
       try { setBalance(await bridgeGetBalance()); } catch { /* ignore */ }
+      return;
+    }
+    if (walletSource === 'yours') {
+      try { setBalance(await yoursWalletService.getBalance()); } catch { /* ignore */ }
       return;
     }
     if (!address) return;
@@ -72,7 +89,7 @@ function App() {
         setBalance((data.confirmed || 0) + (data.unconfirmed || 0));
       }
     } catch { /* ignore */ }
-  }, [address, embeddedMode]);
+  }, [address, walletSource]);
 
   useEffect(() => {
     if (!walletReady) return;
@@ -150,9 +167,27 @@ function App() {
     }
   };
 
+  const handleConnectYours = async () => {
+    if (!username.trim()) { setLoginError('Enter a username first'); return; }
+    try {
+      const { address: addr } = await yoursWalletService.connect();
+      localStorage.setItem(STORAGE_KEYS.USERNAME, username.trim());
+      setAddress(addr);
+      setWalletSource('yours');
+      setWalletReady(true);
+      sfx.play('walletUnlock');
+    } catch (err: any) {
+      setLoginError(err.message);
+    }
+  };
+
   const handleDeleteWallet = () => {
+    if (walletSource === 'yours') {
+      yoursWalletService.disconnect();
+    }
     deleteStoredWallet();
     setWalletReady(false);
+    setWalletSource('local');
     setAddress('');
     setLoginMode('create');
   };
@@ -167,11 +202,15 @@ function App() {
     try {
       let result: { success: boolean; rawTxHex?: string; error?: string };
 
-      if (embeddedMode) {
+      if (walletSource === 'embedded') {
         result = await bridgeSignTransaction(
           mp.escrowAddress, mp.depositSats,
           JSON.stringify({ app: 'TIKTAKTO', action: 'DEPOSIT', game: mp.gameId.substring(0, 8) }),
         );
+      } else if (walletSource === 'yours') {
+        const memo = JSON.stringify({ app: 'TIKTAKTO', action: 'DEPOSIT', game: mp.gameId.substring(0, 8) });
+        const txResult = await yoursWalletService.sendBsv(mp.escrowAddress, mp.depositSats, memo);
+        result = { success: true, rawTxHex: txResult.rawtx };
       } else {
         result = await bsvWalletService.sendGamePayment(
           mp.escrowAddress, mp.depositSats, mp.gameId, 'deposit',
@@ -237,6 +276,9 @@ function App() {
                   value={pin} onChange={e => { setPin(e.target.value); setLoginError(''); }}
                   onKeyDown={e => e.key === 'Enter' && handleUnlock()} />
                 <button className="btn btn-neon" onClick={handleUnlock}>Unlock</button>
+                {yoursAvailable && (
+                  <button className="btn btn-yours" onClick={handleConnectYours}>Connect Yours Wallet</button>
+                )}
                 <div className="login-links">
                   <button className="link-btn" onClick={() => setLoginMode('import')}>Import key</button>
                   <button className="link-btn link-danger" onClick={handleDeleteWallet}>Delete wallet</button>
@@ -253,6 +295,9 @@ function App() {
                   value={pin} onChange={e => { setPin(e.target.value); setLoginError(''); }}
                   onKeyDown={e => e.key === 'Enter' && handleCreate()} />
                 <button className="btn btn-neon" onClick={handleCreate}>Create Wallet</button>
+                {yoursAvailable && (
+                  <button className="btn btn-yours" onClick={handleConnectYours}>Connect Yours Wallet</button>
+                )}
                 <div className="login-links">
                   <button className="link-btn" onClick={() => setLoginMode('import')}>Import existing key</button>
                 </div>
@@ -270,6 +315,9 @@ function App() {
                   value={pin} onChange={e => { setPin(e.target.value); setLoginError(''); }}
                   onKeyDown={e => e.key === 'Enter' && handleImport()} />
                 <button className="btn btn-neon" onClick={handleImport}>Import & Encrypt</button>
+                {yoursAvailable && (
+                  <button className="btn btn-yours" onClick={handleConnectYours}>Connect Yours Wallet</button>
+                )}
                 <div className="login-links">
                   <button className="link-btn" onClick={() => setLoginMode(hasStoredWallet() ? 'unlock' : 'create')}>Back</button>
                 </div>
@@ -295,6 +343,7 @@ function App() {
         <div className="topbar-left">
           <span className="topbar-logo">TTT</span>
           <span className="topbar-user">{username}</span>
+          {walletSource === 'yours' && <span className="topbar-badge">Yours</span>}
         </div>
         <div className="topbar-right">
           <div className="topbar-stat">

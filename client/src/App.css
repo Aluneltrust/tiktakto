@@ -302,6 +302,32 @@ body.bg-battle { background-image: url('/bg/battle-bg.png'); }
   transform: translateY(0);
 }
 
+.btn-yours {
+  background: linear-gradient(135deg, #7c3aed, #a855f7);
+  color: white;
+  border: none;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  font-size: 12px;
+  font-weight: 700;
+  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.25);
+  width: 100%;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 4px;
+}
+
+.btn-yours:hover {
+  box-shadow: 0 4px 28px rgba(124, 58, 237, 0.4), 0 0 12px rgba(168, 85, 247, 0.3);
+  transform: translateY(-1px);
+}
+
+.btn-yours:active {
+  transform: translateY(0);
+}
+
 /* --- Links --- */
 .login-links {
   display: flex;
@@ -451,6 +477,17 @@ body.bg-battle { background-image: url('/bg/battle-bg.png'); }
   font-size: 14px;
   font-weight: 500;
   color: var(--text);
+}
+
+.topbar-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #a855f7;
+  background: rgba(168, 85, 247, 0.12);
+  padding: 2px 8px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .topbar-right {
