@@ -2,7 +2,7 @@
 // BSV TikTakTo — Main App
 // ============================================================================
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { PrivateKey } from '@bsv/sdk';
 import { useMultiplayer } from './hooks/useMultiplayer';
 import { bsvWalletService } from './services/BsvWalletService';
@@ -38,8 +38,9 @@ function App() {
   const [selectedTier, setSelectedTier] = useState(1);
   const [payingDeposit, setPayingDeposit] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const refreshBalanceRef = useRef<() => void>(() => {});
 
-  const mp = useMultiplayer();
+  const mp = useMultiplayer({ onBalanceChange: () => refreshBalanceRef.current() });
 
   useEffect(() => { mp.connect(); sfx.preloadAll(); }, [mp.connect]);
 
@@ -93,6 +94,8 @@ function App() {
       }
     } catch { /* ignore */ }
   }, [address, walletSource]);
+
+  useEffect(() => { refreshBalanceRef.current = refreshBalance; }, [refreshBalance]);
 
   useEffect(() => {
     if (!walletReady) return;

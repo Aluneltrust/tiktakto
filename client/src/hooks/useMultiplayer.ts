@@ -12,7 +12,7 @@ export type GamePhase = 'lobby' | 'matchmaking' | 'awaiting_wagers' | 'playing' 
 export type PlayerSlot = 'player1' | 'player2';
 export type CellValue = '' | 'X' | 'O';
 
-export function useMultiplayer() {
+export function useMultiplayer(opts?: { onBalanceChange?: () => void }) {
   const [gamePhase, setGamePhase] = useState<GamePhase>('lobby');
   const [isConnected, setIsConnected] = useState(false);
   const [gameId, setGameId] = useState('');
@@ -41,8 +41,10 @@ export function useMultiplayer() {
   const socketRef = useRef<Socket | null>(null);
   const boardRef = useRef<CellValue[]>(Array(9).fill(''));
   const mySlotRef = useRef<PlayerSlot>(mySlot);
+  const onBalanceChangeRef = useRef(opts?.onBalanceChange);
 
   useEffect(() => { mySlotRef.current = mySlot; }, [mySlot]);
+  useEffect(() => { onBalanceChangeRef.current = opts?.onBalanceChange; }, [opts?.onBalanceChange]);
 
   const connect = useCallback(() => {
     if (socketRef.current) return;
@@ -82,6 +84,8 @@ export function useMultiplayer() {
         sfx.play('deposit');
         setMyWagerPaid(true);
         setMessage('Deposit paid! Waiting for opponent...');
+        // Refresh balance to reflect deposit deduction
+        setTimeout(() => onBalanceChangeRef.current?.(), 2000);
       } else {
         sfx.play('invalid');
         setMessage(`Wager failed: ${data.error}`);
@@ -143,6 +147,9 @@ export function useMultiplayer() {
         if (outcome === 'draw') sfx.play('draw');
         else sfx.play(outcome === mySlotRef.current ? 'win' : 'lose');
       }, 300);
+      // Refresh wallet balance after settlement tx propagates
+      setTimeout(() => onBalanceChangeRef.current?.(), 3000);
+      setTimeout(() => onBalanceChangeRef.current?.(), 8000);
     });
 
     socket.on('opponent_disconnected', (data) => setMessage(data.message));
@@ -212,6 +219,8 @@ export function useMultiplayer() {
 
     socket.on('wager_refunded', (data) => {
       setMessage(`Deposit refunded: ${data.amount} sats. TX: ${data.txid?.slice(0, 12)}...`);
+      // Refresh balance to reflect refund
+      setTimeout(() => onBalanceChangeRef.current?.(), 3000);
     });
 
     socket.on('error', (data) => setMessage(data.message || 'Error'));
